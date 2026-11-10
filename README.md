@@ -1,29 +1,34 @@
+<p align="center">
+  <a href="README.md"><img alt="English" src="https://img.shields.io/badge/English-1f6feb?style=for-the-badge"></a>
+  <a href="README.ru.md"><img alt="Русский" src="https://img.shields.io/badge/%D0%A0%D1%83%D1%81%D1%81%D0%BA%D0%B8%D0%B9-555555?style=for-the-badge"></a>
+</p>
+
 # StoreForge Authorization Service
 
-Микросервис авторизации на Go для централизованной проверки прав пользователей в StoreForge.
+A Go authorization microservice for centralised user permission checks in StoreForge.
 
-Сервис является продолжением связки из Auth Service и Session Service. Auth Service отвечает за аутентификацию пользователя и выдачу токенов, Session Service на C++ хранит и управляет активными сессиями, а Authorization Service определяет, имеет ли пользователь право выполнить конкретное действие над конкретным ресурсом.
+The service extends the pair of Auth Service and Session Service. Auth Service authenticates users and issues tokens, the C++ Session Service stores and manages active sessions, and Authorization Service decides whether a user may perform a specific action on a specific resource.
 
-## Возможности
+## Features
 
-- ролевая модель доступа RBAC;
-- политики доступа с элементами ABAC;
-- проверка владельца ресурса;
-- `allow` и `deny` политики;
-- приоритет `deny` над разрешающими правилами;
+- RBAC role model;
+- access policies with ABAC elements;
+- resource ownership checks;
+- `allow` and `deny` policies;
+- `deny` takes precedence over allowing rules;
 - wildcard permissions `* / *`;
-- несколько ролей у одного пользователя;
-- хранение ролей, permissions и policies в PostgreSQL;
-- кэширование effective access пользователя в Redis;
-- инвалидация кэша при изменении ролей и правил;
-- опциональная проверка активной сессии через StoreForge Session Service;
-- защита внутренних endpoint'ов через `X-Internal-Api-Key`;
-- `/healthz` и `/readyz`;
+- multiple roles per user;
+- roles, permissions and policies stored in PostgreSQL;
+- caching of each user's effective access in Redis;
+- cache invalidation when roles and rules change;
+- optional active-session check via StoreForge Session Service;
+- internal endpoints protected with `X-Internal-Api-Key`;
+- `/healthz` and `/readyz`;
 - graceful shutdown;
-- Docker и Docker Compose;
-- unit-тесты бизнес-логики и HTTP-клиента Session Service.
+- Docker and Docker Compose;
+- unit tests for the business logic and the Session Service HTTP client.
 
-## Архитектура
+## Architecture
 
 ```text
                      ┌──────────────────────┐
@@ -53,19 +58,19 @@
                  └─────────────────────────────────────────┘
 ```
 
-### Ответственность сервисов
+### Service responsibilities
 
-**Auth Service** отвечает за регистрацию, логин, проверку credentials и выдачу access/refresh токенов.
+**Auth Service** handles registration, login, credential checks and issuing access/refresh tokens.
 
-**Session Service** отвечает за активные сессии, устройства, IP/User-Agent, ротацию refresh-токенов, отзыв отдельных сессий и logout-all.
+**Session Service** handles active sessions, devices, IP/User-Agent, refresh-token rotation, revoking individual sessions and logout-all.
 
-**Authorization Service** отвечает за роли, permissions, policies и итоговое решение `allow / deny`.
+**Authorization Service** handles roles, permissions, policies and the final `allow / deny` decision.
 
-## Как принимается решение
+## How a decision is made
 
-Authorization Service получает `user_id`, действие и ресурс. Если включена проверка сессий, дополнительно передаётся `session_id`.
+Authorization Service receives a `user_id`, an action and a resource. If session checks are enabled, a `session_id` is passed as well.
 
-Пример запроса:
+Example request:
 
 ```json
 {
@@ -80,7 +85,7 @@ Authorization Service получает `user_id`, действие и ресур
 }
 ```
 
-Порядок проверки:
+Check order:
 
 ```text
 request
@@ -114,17 +119,17 @@ roles + permissions        │
               allow / deny
 ```
 
-Сначала проверяются подходящие policies. Если найдена подходящая `deny` policy, запрос запрещается независимо от обычных RBAC permissions. Если запрета нет, проверяется прямое permission. Если прямого permission нет, результат может быть разрешён подходящей `allow` policy.
+Matching policies are checked first. If a matching `deny` policy is found, the request is denied regardless of regular RBAC permissions. If there is no deny, the direct permission is checked. If there is no direct permission, the request can still be allowed by a matching `allow` policy.
 
 ## RBAC
 
-Permission задаётся парой:
+A permission is a pair:
 
 ```text
 resource + action
 ```
 
-Примеры:
+Examples:
 
 ```text
 order + read
@@ -133,13 +138,13 @@ order + update
 profile + read
 ```
 
-Для полного доступа поддерживается wildcard:
+Full access is supported with a wildcard:
 
 ```text
 * + *
 ```
 
-Начальная миграция создаёт роли:
+The initial migration creates the roles:
 
 ```text
 user
@@ -147,20 +152,20 @@ moderator
 admin
 ```
 
-Также создаётся базовый набор permissions для `profile` и `order`.
+It also creates a base set of permissions for `profile` and `order`.
 
-## ABAC и ownership
+## ABAC and ownership
 
-Policies позволяют учитывать дополнительные условия при проверке доступа.
+Policies let access checks take extra conditions into account.
 
-Поддерживаемые `condition_type`:
+Supported `condition_type` values:
 
 ```text
 always
 owner
 ```
 
-Пример policy:
+Example policy:
 
 ```text
 role = user
@@ -170,13 +175,13 @@ effect = allow
 condition_type = owner
 ```
 
-Такая policy срабатывает только если:
+This policy applies only if:
 
 ```text
 resource.owner_id == user_id
 ```
 
-Для пользователя `42` этот запрос будет удовлетворять условию владельца:
+For user `42`, this request satisfies the ownership condition:
 
 ```json
 {
@@ -190,7 +195,7 @@ resource.owner_id == user_id
 }
 ```
 
-А этот — нет:
+And this one does not:
 
 ```json
 {
@@ -204,30 +209,30 @@ resource.owner_id == user_id
 }
 ```
 
-## Интеграция с Session Service
+## Session Service integration
 
-По умолчанию проверка сессий отключена:
+Session checks are disabled by default:
 
 ```env
 SESSION_VALIDATION_ENABLED=false
 ```
 
-Чтобы Authorization Service проверял активность сессии, установите:
+To make Authorization Service check that the session is active, set:
 
 ```env
 SESSION_VALIDATION_ENABLED=true
 ```
 
-При проверке сервис обращается к C++ Session Service:
+During the check the service calls the C++ Session Service:
 
 ```http
 GET /v1/users/{user_id}/sessions
 X-Internal-Api-Key: <SESSION_SERVICE_API_KEY>
 ```
 
-Authorization Service ищет переданный `session_id` среди активных сессий пользователя и дополнительно проверяет `expires_at`.
+Authorization Service looks up the given `session_id` among the user's active sessions and also checks `expires_at`.
 
-Если сессия отсутствует или истекла:
+If the session is missing or expired:
 
 ```json
 {
@@ -236,7 +241,7 @@ Authorization Service ищет переданный `session_id` среди ак
 }
 ```
 
-Если проверка сессий включена, но `session_id` не передан:
+If session checks are enabled but no `session_id` is passed:
 
 ```json
 {
@@ -245,29 +250,29 @@ Authorization Service ищет переданный `session_id` среди ак
 }
 ```
 
-Для Session Service, запущенного отдельным Docker Compose проектом на той же машине, можно использовать:
+For a Session Service running as a separate Docker Compose project on the same machine, you can use:
 
 ```env
 SESSION_SERVICE_URL=http://host.docker.internal:8081
 ```
 
-В общей Docker-сети или Kubernetes необходимо указать DNS-имя сервиса.
+In a shared Docker network or Kubernetes, set the service's DNS name.
 
 ## API
 
-Все endpoint'ы, кроме `/healthz` и `/readyz`, требуют заголовок:
+All endpoints except `/healthz` and `/readyz` require the header:
 
 ```http
 X-Internal-Api-Key: <INTERNAL_API_KEY>
 ```
 
-### Проверить доступ
+### Check access
 
 ```http
 POST /v1/authorize
 ```
 
-Пример:
+Example:
 
 ```bash
 curl -X POST http://localhost:8080/v1/authorize \
@@ -284,7 +289,7 @@ curl -X POST http://localhost:8080/v1/authorize \
   }'
 ```
 
-Разрешение:
+Allowed:
 
 ```json
 {
@@ -293,7 +298,7 @@ curl -X POST http://localhost:8080/v1/authorize \
 }
 ```
 
-Отказ:
+Denied:
 
 ```json
 {
@@ -302,7 +307,7 @@ curl -X POST http://localhost:8080/v1/authorize \
 }
 ```
 
-Возможные `reason`:
+Possible `reason` values:
 
 ```text
 permission_granted
@@ -313,13 +318,13 @@ session_required
 insufficient_permissions
 ```
 
-### Получить список ролей
+### List roles
 
 ```http
 GET /v1/roles
 ```
 
-### Создать роль
+### Create a role
 
 ```http
 POST /v1/roles
@@ -331,13 +336,13 @@ POST /v1/roles
 }
 ```
 
-### Получить роли пользователя
+### Get a user's roles
 
 ```http
 GET /v1/users/{user_id}/roles
 ```
 
-### Заменить роли пользователя
+### Replace a user's roles
 
 ```http
 PUT /v1/users/{user_id}/roles
@@ -349,9 +354,9 @@ PUT /v1/users/{user_id}/roles
 }
 ```
 
-Этот endpoint полностью заменяет текущий набор ролей пользователя переданным списком.
+This endpoint fully replaces the user's current set of roles with the given list.
 
-### Добавить permission роли
+### Add a permission to a role
 
 ```http
 POST /v1/roles/{role_name}/permissions
@@ -364,7 +369,7 @@ POST /v1/roles/{role_name}/permissions
 }
 ```
 
-### Добавить policy роли
+### Add a policy to a role
 
 ```http
 POST /v1/roles/{role_name}/policies
@@ -379,14 +384,14 @@ POST /v1/roles/{role_name}/policies
 }
 ```
 
-Допустимые значения `effect`:
+Allowed `effect` values:
 
 ```text
 allow
 deny
 ```
 
-Допустимые значения `condition_type`:
+Allowed `condition_type` values:
 
 ```text
 always
@@ -401,7 +406,7 @@ owner
 GET /healthz
 ```
 
-Ответ:
+Response:
 
 ```json
 {
@@ -409,7 +414,7 @@ GET /healthz
 }
 ```
 
-`/healthz` проверяет, что процесс HTTP-сервера работает.
+`/healthz` checks that the HTTP server process is running.
 
 ### Readiness
 
@@ -417,13 +422,13 @@ GET /healthz
 GET /readyz
 ```
 
-`/readyz` проверяет:
+`/readyz` checks:
 
 - PostgreSQL;
 - Redis;
-- Session Service, если `SESSION_VALIDATION_ENABLED=true`.
+- Session Service, if `SESSION_VALIDATION_ENABLED=true`.
 
-При готовности:
+When ready:
 
 ```json
 {
@@ -433,7 +438,7 @@ GET /readyz
 
 ## PostgreSQL
 
-Сервис использует таблицы:
+The service uses the tables:
 
 ```text
 roles
@@ -443,7 +448,7 @@ role_permissions
 policies
 ```
 
-Схема связей:
+Relationships:
 
 ```text
 user_id
@@ -458,39 +463,39 @@ roles
   └──────────────► policies
 ```
 
-Таблицы пользователей в этом сервисе нет. `user_id` приходит из Auth Service и используется как внешний идентификатор пользователя без foreign key на отдельную таблицу `users`.
+There is no users table in this service. `user_id` comes from Auth Service and is used as an external user identifier, without a foreign key to a separate `users` table.
 
-Миграция находится в:
+The migration is located in:
 
 ```text
 migrations/001_init.sql
 ```
 
-При запуске через Docker Compose она автоматически применяется PostgreSQL при создании нового volume.
+When running via Docker Compose, PostgreSQL applies it automatically when a new volume is created.
 
 ## Redis
 
-Effective access пользователя кэшируется под ключом:
+A user's effective access is cached under the key:
 
 ```text
 authorization:access:<user_id>
 ```
 
-В кэш сохраняются permissions и policies пользователя.
+The cache stores the user's permissions and policies.
 
-TTL задаётся через:
+The TTL is set with:
 
 ```env
 PERMISSIONS_CACHE_TTL=5m
 ```
 
-При замене ролей пользователя удаляется только его cache key.
+Replacing a user's roles deletes only that user's cache key.
 
-При добавлении permission или policy роли выполняется полная инвалидация кэша `authorization:access:*`, потому что изменение роли может затронуть нескольких пользователей.
+Adding a permission or policy to a role fully invalidates the `authorization:access:*` cache, because a role change can affect several users.
 
-Если Redis временно недоступен при чтении кэша, сервис пытается получить данные из PostgreSQL. Ошибка записи результата обратно в Redis не блокирует решение авторизации.
+If Redis is temporarily unavailable when reading the cache, the service falls back to PostgreSQL. A failure to write the result back to Redis does not block the authorization decision.
 
-## Структура проекта
+## Project structure
 
 ```text
 storeforge-authorization-service/
@@ -526,10 +531,11 @@ storeforge-authorization-service/
 ├── Dockerfile
 ├── go.mod
 ├── Makefile
-└── README.md
+├── README.md
+└── README.ru.md
 ```
 
-## Технологии
+## Tech stack
 
 - Go 1.23;
 - `net/http`;
@@ -541,9 +547,9 @@ storeforge-authorization-service/
 - Docker;
 - Docker Compose.
 
-## Конфигурация
+## Configuration
 
-Пример `.env`:
+Example `.env`:
 
 ```env
 HTTP_ADDRESS=:8080
@@ -559,39 +565,39 @@ PERMISSIONS_CACHE_TTL=5m
 HTTP_CLIENT_TIMEOUT=3s
 ```
 
-| Переменная | Назначение | Значение по умолчанию |
+| Variable | Purpose | Default |
 |---|---|---|
-| `HTTP_ADDRESS` | адрес HTTP-сервера | `:8080` |
-| `DATABASE_URL` | DSN PostgreSQL | локальная БД `storeforge_authorization` |
-| `REDIS_ADDRESS` | адрес Redis | `localhost:6379` |
-| `REDIS_PASSWORD` | пароль Redis | пустой |
-| `REDIS_DATABASE` | номер Redis DB | `0` |
-| `INTERNAL_API_KEY` | ключ внутреннего API | `change-me` |
-| `SESSION_VALIDATION_ENABLED` | включить проверку сессий | `false` |
-| `SESSION_SERVICE_URL` | URL Session Service | `http://localhost:8081` |
-| `SESSION_SERVICE_API_KEY` | API key Session Service | `change-me` |
-| `PERMISSIONS_CACHE_TTL` | TTL effective-access cache | `5m` |
-| `HTTP_CLIENT_TIMEOUT` | timeout запросов к Session Service | `3s` |
+| `HTTP_ADDRESS` | HTTP server address | `:8080` |
+| `DATABASE_URL` | PostgreSQL DSN | local `storeforge_authorization` DB |
+| `REDIS_ADDRESS` | Redis address | `localhost:6379` |
+| `REDIS_PASSWORD` | Redis password | empty |
+| `REDIS_DATABASE` | Redis DB number | `0` |
+| `INTERNAL_API_KEY` | internal API key | `change-me` |
+| `SESSION_VALIDATION_ENABLED` | enable session checks | `false` |
+| `SESSION_SERVICE_URL` | Session Service URL | `http://localhost:8081` |
+| `SESSION_SERVICE_API_KEY` | Session Service API key | `change-me` |
+| `PERMISSIONS_CACHE_TTL` | effective-access cache TTL | `5m` |
+| `HTTP_CLIENT_TIMEOUT` | timeout for Session Service requests | `3s` |
 
-Для реального окружения обязательно замените значения `INTERNAL_API_KEY` и `SESSION_SERVICE_API_KEY`.
+In a real environment, be sure to replace `INTERNAL_API_KEY` and `SESSION_SERVICE_API_KEY`.
 
-## Запуск через Docker Compose
+## Running with Docker Compose
 
-Создайте `.env`:
+Create `.env`:
 
 ```bash
 cp .env.example .env
 ```
 
-При необходимости измените ключи и настройки интеграции с Session Service.
+Change the keys and the Session Service integration settings if needed.
 
-Запустите проект:
+Start the project:
 
 ```bash
 docker compose up --build
 ```
 
-Docker Compose поднимет:
+Docker Compose starts:
 
 ```text
 PostgreSQL
@@ -599,98 +605,98 @@ Redis
 Authorization Service
 ```
 
-Сервис будет доступен на:
+The service is available at:
 
 ```text
 http://localhost:8080
 ```
 
-Проверка:
+Check:
 
 ```bash
 curl http://localhost:8080/healthz
 curl http://localhost:8080/readyz
 ```
 
-Остановка:
+Stop:
 
 ```bash
 docker compose down
 ```
 
-Для удаления данных PostgreSQL и Redis:
+To delete PostgreSQL and Redis data:
 
 ```bash
 docker compose down -v
 ```
 
-## Локальный запуск
+## Running locally
 
-Для локального запуска должны быть доступны PostgreSQL и Redis.
+PostgreSQL and Redis must be available to run locally.
 
-Сначала установите зависимости и сформируйте `go.sum`:
+First install dependencies and generate `go.sum`:
 
 ```bash
 go mod tidy
 ```
 
-Запустите сервис:
+Start the service:
 
 ```bash
 go run ./cmd/authorization-service
 ```
 
-Либо через Makefile:
+Or via the Makefile:
 
 ```bash
 make run
 ```
 
-Сборка бинарника:
+Build the binary:
 
 ```bash
 make build
 ```
 
-Бинарник будет создан в:
+The binary is created at:
 
 ```text
 bin/authorization-service
 ```
 
-## Тесты
+## Tests
 
-Запуск всех тестов:
+Run all tests:
 
 ```bash
 go test ./...
 ```
 
-Или:
+Or:
 
 ```bash
 make test
 ```
 
-Сейчас тестами покрыты базовые сценарии:
+Tests currently cover the basic scenarios:
 
-- прямое RBAC permission;
+- direct RBAC permission;
 - ownership policy;
-- отказ при недействительной сессии;
-- HTTP-клиент интеграции с Session Service.
+- denial on an invalid session;
+- the Session Service integration HTTP client.
 
-## Пример сценария использования
+## Example usage flow
 
-1. Пользователь логинится через Auth Service.
-2. Auth Service создаёт или обновляет сессию в Session Service.
-3. Backend получает `user_id` и `session_id` из доверенного auth-контекста.
-4. Перед выполнением защищённой операции Backend вызывает `POST /v1/authorize`.
-5. Authorization Service при необходимости проверяет сессию через C++ Session Service.
-6. Права пользователя загружаются из Redis или PostgreSQL.
-7. Policy Engine принимает решение.
-8. Backend выполняет действие только при `allowed: true`.
+1. The user logs in via Auth Service.
+2. Auth Service creates or updates the session in Session Service.
+3. The backend gets `user_id` and `session_id` from a trusted auth context.
+4. Before a protected operation, the backend calls `POST /v1/authorize`.
+5. Authorization Service checks the session via the C++ Session Service if needed.
+6. The user's permissions are loaded from Redis or PostgreSQL.
+7. The Policy Engine makes the decision.
+8. The backend performs the action only if `allowed: true`.
 
-Пример:
+Example:
 
 ```json
 {
@@ -705,7 +711,7 @@ make test
 }
 ```
 
-Ответ:
+Response:
 
 ```json
 {
@@ -714,20 +720,20 @@ make test
 }
 ```
 
-## Безопасность
+## Security
 
-Authorization Service рассчитан на внутреннее межсервисное взаимодействие. Пользовательский клиент не должен напрямую обращаться к административным endpoint'ам управления ролями и policies.
+Authorization Service is designed for internal service-to-service communication. User-facing clients must not call the administrative endpoints for managing roles and policies directly.
 
-Минимальные требования для нормального развёртывания:
+Minimum requirements for a proper deployment:
 
-- заменить стандартные API keys;
-- не публиковать внутренние endpoint'ы напрямую в интернет;
-- ограничить сетевой доступ к сервису;
-- передавать `user_id` и `session_id` только из доверенного auth-контекста;
-- в production использовать защищённое соединение с PostgreSQL, Redis и другими сервисами;
-- хранить секреты вне репозитория.
+- replace the default API keys;
+- do not expose internal endpoints directly to the internet;
+- restrict network access to the service;
+- pass `user_id` and `session_id` only from a trusted auth context;
+- in production, use secure connections to PostgreSQL, Redis and other services;
+- keep secrets out of the repository.
 
-## Связанные сервисы
+## Related services
 
 ```text
 StoreForge Auth Service          Python / FastAPI
@@ -735,10 +741,10 @@ StoreForge Session Service       C++20
 StoreForge Authorization Service Go
 ```
 
-Вместе они разделяют три разные задачи IAM-контура:
+Together they split three different IAM concerns:
 
 ```text
-Authentication  -> кто пользователь
-Session         -> активна ли его сессия
-Authorization   -> что ему разрешено делать
+Authentication  -> who the user is
+Session         -> whether their session is active
+Authorization   -> what they are allowed to do
 ```
